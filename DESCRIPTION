@@ -1,0 +1,14 @@
+Package: selectioncorrelatedgenotypes
+Type: Package
+Title: Selection on correlated genotypes
+Version: 0.0.0.9000
+Authors@R: person("Moises", "Exposito-Alonso", email = "moisesexpositoalonso@gmail.com", role = c("aut", "cre"))
+Maintainer: The package maintainer <yourself@somewhere.net>
+Description: This package shows how kinship correction in highly structured populations hinders SNP identification. A naïve GWA might be useful for ranking SNPs when the sole purpose is to rank SNPs and understand selection consequences in allele frequency.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+LinkingTo: Rcpp, RcppArmadillo, RcppEigen, BH, bigmemory
+Imports: Rcpp, devtools
+Depends: ggplot2, cowplot, dplyr, tidyr
+SystemRequirements: C++11

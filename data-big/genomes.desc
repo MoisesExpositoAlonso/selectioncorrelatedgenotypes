@@ -1,0 +1,9 @@
+new("big.matrix.descriptor"
+    , description = structure(list(sharedType = "FileBacked", filename = "genomes.bk", 
+    dirname = "data-big//", totalRows = 515L, totalCols = 1000L, 
+    rowOffset = c(0, 515), colOffset = c(0, 1000), nrow = 515, 
+    ncol = 1000, rowNames = NULL, colNames = NULL, type = "double", 
+    separated = FALSE), .Names = c("sharedType", "filename", 
+"dirname", "totalRows", "totalCols", "rowOffset", "colOffset", 
+"nrow", "ncol", "rowNames", "colNames", "type", "separated"))
+)

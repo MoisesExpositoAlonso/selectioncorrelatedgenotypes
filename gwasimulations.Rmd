@@ -1,0 +1,43 @@
+---
+title: "Selection on correlated genotypes"
+author: "Moi Exposito-Alonso"
+date: '`r Sys.Date()`'
+output:
+  pdf_document:
+  header-inclusdes:
+   - \usepackage{amsmath}
+   - \usepackage{caption}
+   - \usepackage{subcaption}
+   - \usepackage{graphicx}
+---
+
+## Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## Load packages
+library(devtools)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+
+# devtools::install(".")
+load_all('.')
+
+```
+
+## The SNPs in the genome of A thaliana are correlated
+```{r}
+
+## Read a genome matrix of the first 1000 SNPs of chromosome 1 as example
+## g<-readplink("data-raw/515g_1000.012") ## run 1 time
+genomes<-readRDS('data-big/genomes.rda')
+genomes<-attachgenomes(genomes)
+
+X<-genomes$g[,]
+Xcent<-Xmvcenter(X)
+V=X %*% t(X)
+
+```
+
+## Example of association with naïve and kinship GWA
