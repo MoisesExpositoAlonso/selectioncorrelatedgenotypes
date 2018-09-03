@@ -232,13 +232,20 @@ set.seed(1)
 # sampled<-sample(1:515,250)
 # sampled<-1:100
 data(acc515)
+rownames(acc515) <- acc515$id
+# acc515_backup<-acc515
+acc515<-acc515[as.character(genomes$fam$sample.ID),]
+
 sampled<-which(acc515$country =="ESP")
+# sampled<-which(acc515$country =="ESP") %>% sample(.,10)
 sampled<-which(acc515$country =="ESP") %>% sample(.,50)
+# sampled<-which(acc515$country =="SWE")  %>% sample(.,50)
+# sampled<-which(acc515$country =="USA") %>% sample(.,10)
   
 p0_=apply(X1[sampled,],2,mean)
 p1_<-sapply(1:ncol(X1[sampled,]), function(i){
         sample(x = X1[sampled,i], 
-           size = 250,
+           size = 515,
            prob = c(y[sampled]),
            replace=T
            ) %>% mean 
