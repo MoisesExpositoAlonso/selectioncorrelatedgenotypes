@@ -1,5 +1,5 @@
 ---
-title: "Selection on correlated genotypes, and the change in frequency in response to selection"
+title: "Selection on correlated genotypes and the change in frequency in response to selection"
 # subtitle: "EQUATIONS"
 author: "Moi Exposito-Alonso"
 # date: '`r Sys.Date()`'
@@ -37,7 +37,12 @@ set.seed(10)
 
 ```
 
-These analyses are a proof of concept of how different genome-wide association methods on relative fitness capture better or worse the consequences of natural selection on the genetic makeup of a population. Specificially, both direct and indirect natural selection will change the frequency of genetic variants of a population after a single selection event. Much of the methods and discussions below have already been addressed by Gompert et al 2017 Molecular Ecology ("Multilocus approaches for the measurement of selection on correlated genetic loci"), so we refer to them for a much more extense discussion.
+These analyses are a proof of concept of how different genome-wide association methods on relative fitness capture better or worse the consequences of natural selection on the genetic makeup of a population. Specificially, both direct and indirect natural selection will change the frequency of genetic variants of a population after a single selection event. Virtually all the methods and discussions below have already been published by Gompert et al 2017 Molecular Ecology ("Multilocus approaches for the measurement of selection on correlated genetic loci"), so we refer to them for a much more extense discussion.
+
+To summarize them, Gompert thinks of the association of genotypes with fitness in analogy to Arnold & Lande's classic Evolution paper "The Measurement of Selection on Correlated Characters" that tries to address direct and direct selection on multiple phenotypes. From their manuscript, the formulation of total selction over a trait $zi$ is represented by: $s=Cov[w,zi]$; where $w$ is the relative fitness. Because other phenotypic traits can covary with $zi$, one cannot be sure fromt his approach that all the selection experienced by $zi$ is from direct effects, but a sum of indirects effects from $n$ other traits: $s=\sum_{j=1}^{n}Cov[zi,zj] \beta_j$; where $\beta$ represents the direct effects of seleciton and can be calculated as $\beta=P^1 s$, where $P$ is the $n$ dimensional variance-covariance matrix. 
+
+Gompert et al discuss that the same approach can be applied to genetic loci instead of phenotypes (although with some extra nuances as the large amount of predictors that can be solved with modern GWA approaches).
+
 
 
 ## The SNPs in the genome of A thaliana are correlated
@@ -50,27 +55,36 @@ For simplicity in the analyses below, we use 1000 contiguous SNPs from chromosom
 genomes<-readRDS('data-big/genomes.rda')
 genomes<-attachgenomes(genomes)
 
-X<-genomes$g[,]
-Xs<-X-1 # transform to -1 +1 format
+X<-genomes$g[,] # originally coded as 0 and 2
+X1=X/(X+1e-32) # transformed to 0 and 1
+Xs<-X-1 # transform to -1 +1 format for one software
 
 # LD r
-V=cor(Xs)
-hist(V,xlab="Linkage disequilibrium (r2)", main="",col="black", breaks=100)
+V=cor(X1)
+hist(V,xlab="Linkage disequilibrium (r2)", main="",col="black", breaks=50)
 
 ```
 
-We can see that alternative (minor) alleles are on average in positive linkage disequilibrium
+We can see that alternative (minor) alleles are biased to have positive linkage disequilibrium
 
 ## Simulate selection coefficients and fitness
 
-In order to evaluate later whether GWA capture well true selection coefficients, we simulate some true selection coefficient and calculate the overall relative fitness of the different Arabidopsis accessions (based on an additive model).
+In order to evaluate later whether GWA captures well true selection coefficients, we simulate selection coefficient and calculate the overall relative fitness of the different Arabidopsis accessions (based on an additive model).
 
 ```{r}
-s<-rnorm(1000,mean = 0,sd = 0.1)
-hist(s, xlab="Selection coefficients (s)",main="",col="black")
-hist(abs(s), xlab="Absolute selection coefficients (|s|)",main="",col="black")
+set.seed(1)
 
-y<-(Xs %*% s)
+s<-rnorm(1000,mean = 0,sd = 0.1) # polygenic
+
+# s<-rep(0,1000) # for monogenic architecture, results are comparable
+# s[sample(1:1000,1)]<-1 * sample(c(-1,1),1)
+# s[sample(1:1000,1)]<-0.5 * sample(c(-1,1),1)
+# s[sample(1:1000,1)]<-0.05 * sample(c(-1,1),1)
+
+
+hist(s, xlab="Selection coefficients (s)",main="",col="black")
+
+y<-(X1 %*% s)
 h2 <- 0.9 # high heritability for simplicity
 y <- y + rnorm(515,mean=0,sd=sqrt((1-h2)/h2*var(y)))
 y<-y/mean(y)
@@ -79,7 +93,6 @@ hist(y, xlab="Relative fitness per individuals (w)",main="",col="black",breaks=5
 
 ```
 
-This distribution very much looks like the distribution of fitness of Arabidopsis accessions in the drought treatment of the Spainish field site in Exposito-Alonso 2018 bioRxiv.
 
 
 ## Example of association with marginal GWA
@@ -92,13 +105,14 @@ where $i$ refers to a specific SNP, and the linear model is repeated separately 
 
 
 ```{r}
-marglm<-gwamarg(y, Xs)
+marglm<-gwamarg(y, X1)
 b=c(marglm)
 # hist(b, xlab="Inferred allelic selection differentials (b=s)",main="",col="black")
 # plot(b ~ genomes$map$physical.pos, xlab="Chromosome position (bp)", pch=16)
-ggdotscolor(b,s, 
+pl1<-ggdotscolor(b,s, 
             xlab = TeX("$\\beta$ from marginal GWA"),
-            ylab = TeX("True $s$")) %>% moiR::addggregression()
+            ylab = TeX("True $s$"))  #%>% addggregression()
+pl1
 ```
 
 
@@ -120,42 +134,28 @@ colnames(K)=rownames(K)=genomes$fam$sample.ID
 pheno=data.frame(genomes$fam$sample.ID,y)
 geno_<-t(Xs)
 colnames(geno_)<-genomes$fam$sample.ID
-geno=cbind(data.frame(genomes$map$marker.ID,genomes$map$chromosome,genomes$map$physical.pos), geno_)
+geno=cbind(data.frame(genomes$map$marker.ID,
+                      genomes$map$chromosome,
+                      genomes$map$physical.pos), geno_)
 
 
 
-####************************************************************************####
 ## Two step. GBLUP and gwa on residuals (for simplicity)
 blup<-kin.blup(data=data.frame(y=y, Genotype=genomes$fam$sample.ID) ,
                pheno="y",
                geno="Genotype",
                K=K)
-blup$Vg / (blup$Vg+blup$Ve)
-myres<-blup$resid
-b_gblup<-gwamarg(myres, Xs)
-bg=b_gblup
-ggdotscolor(bg,s,
-            xlab = TeX("$\\beta$ from GBLUP GWA"),
-            ylab = TeX("$s$")) %>% moiR::addggregression()
-####************************************************************************####
-# ## One step using the standard gwa in package, although do not povide effect estimate
-# gwanormal<-GWAS(pheno,geno,plot = F,K=K) 
-# byu<-gwanormal$y # this is the proportion of variance explained
-# maf=apply((Xs+1)/( (Xs+1)+1e-10) ,2,mean)
-# direction<- (cor(y,X)/abs(cor(y,X))) 
-# bk<- sqrt(byu/(2*maf*(1-maf))) * direction # Transform percentage of variance explained to effect size, since the software does not provide it (based on Teslovich et al.2010 Nature;466:707–713.)
-# ggdotscolor(c(bk),s,
-#             xlab = TeX("$\\beta$ from GBLUP GWA"),
-#             ylab = TeX("$s$")) %>% moiR::addggregression()
+message("Variance assigned to the kinship term: ", blup$Vg / (blup$Vg+blup$Ve)
+)
+resvarprop=blup$Ve / (blup$Vg+blup$Ve)
 
-####************************************************************************####
-## We can also use ridge regression, in analogy to the Bayesian Sparse Linear Mixed Model -- this is a multiloci gwa, an is probably the best estimating true effects.s
-# library(MASS)
-# bridge<-lm.ridge(y~Xs)
-# b_ridge=bridge$coef
-# ggdotscolor(b_ridge,s,
-#             xlab = TeX("$\\beta$ from Multilocus Ridge GWA"),
-#             ylab = TeX("$s$")) %>% moiR::addggregression()
+myres<-blup$resid
+b_gblup<-gwamarg(myres, X1)
+bg=b_gblup * resvarprop
+pl2<-ggdotscolor(bg,s,
+            xlab = TeX("$\\beta$ from GBLUP GWA"),
+            ylab = TeX("True $s$")) 
+pl2
 
 ```
 
@@ -172,12 +172,12 @@ Regardless of the above complications, when the aim of characterizing the impact
 To provide a visual example, we can compare estimates from kinship vs marginal GWA with allele frequency changes in a simple individual-based population simulation approach. In such approach, we sample the 515 genotypes that will comprise the next generation proportionally to their relative fitness. Then we calculate the allele frequencies of the 515 genotypes before and after one generation of selection.
 
 ```{r}
-X01=(X/(X+1e-10))
+set.seed(1)
 
-p0=apply(X01,2,mean)
+p0=apply(X1,2,mean)
 
-p1<-sapply(1:ncol(X01), function(i){
-        sample(x = X01[,i], 
+p1<-sapply(1:ncol(X1), function(i){
+        sample(x = X1[,i], 
            size = 515,
            prob = c(y),
            replace=T
@@ -188,87 +188,202 @@ p1<-sapply(1:ncol(X01), function(i){
 hist(p1-p0, col="black",breaks=100,xlab=TeX("p_1 - p_0"))
 abline(v=mean(p1-p0))
 
-ggdotscolor(b,p1-p0,
+pl3<-ggdotscolor(b,p1-p0,
              ylab=TeX("p_1 - p_0"),
-             xlab=TeX("$\\beta$ from marginal GWA")) # %>% moiR::addggregression()
-ggdotscolor(c(bg),p1-p0,
+             xlab=TeX("$\\beta$ from marginal GWA") ) +
+              geom_hline(yintercept=0,color="grey") +
+              geom_vline(xintercept=0,color="grey") 
+              
+pl4<-ggdotscolor(c(bg),p1-p0,
              ylab=TeX("p_1 - p_0"),
-             xlab=TeX("$\\beta_{GBLUP}$ from GBLUP GWA")) # %>% moiR::addggregression()
+             xlab=TeX("$\\beta_{GBLUP}$ from GBLUP GWA")) +
+              geom_hline(yintercept=0,color="grey") +
+              geom_vline(xintercept=0,color="grey") 
+pl3
+pl4
+
 ```
 
-This is because the simple calculation of mean fitness between genotypes carrying alternative and reference alleles, $s = w_{11} - w_{00}$, which is essentially what a marginal GWA provides, is directly proportional to the change in frequency of the allele in the population, no matter whether this is due to causal effects in fitness of the allele or linked effects of other alleles. The equation was long written by J.B.S. Haldane, $s \times p(1-p)$. 
+This is because the simple calculation of mean fitness between genotypes carrying alternative and reference alleles, $s = w_{11} - w_{00}$, which is essentially what a marginal GWA provides, is directly proportional to the change in frequency of the allele in the population, no matter whether this is due to causal effects in fitness of the allele or linked effects of other alleles. The equation is $\delta p = s \times p(1-p)$ (Charlesworth & Charleswroth 2010, page 53). 
 
 Below is the comparison of a marginal GWA $\beta$ estimate (aka. realized $s = w_{11} - w_{00}$), which match perfectly.
 
 ```{r}
-ggdotscolor( b*(1-p0)*p0 ,p1-p0,
-             xlab = TeX("Haldane's equation: $\\beta (1-p)p$"),
+pl5<-ggdotscolor( b*(1-p0)*p0 ,p1-p0,
+             xlab = TeX("$\\beta (1-p)p$"),
              ylab=TeX("p_1-p_0")
              ) %>% moiR::addggregression()
-ggdotscolor( c(bg)*(1-p0)*p0 ,p1-p0,
-             xlab = TeX("Haldane's equation: $\\beta_{GBLUP} (1-p)p$"),
+pl6<-ggdotscolor( c(bg)*(1-p0)*p0 ,p1-p0,
+             xlab = TeX(" $\\beta_{GBLUP} (1-p)p$"),
              ylab=TeX("p_1-p_0")
              ) %>% moiR::addggregression()
+pl5
+pl6
 ```
 
+## Extrapolability to other groups of genotypes?
 
-## Artificially remove linkage structure and re-calculate
+In order to check whether the previous two predictions of allele frequency are just dependent on this population of 515 genotypes or not, the individual based simulations are run in a subset population of over 50 genotypes, instead of 515 genotypes. These 50 were not randomly selected (otherwise allele frequencies would not be much alterred), but we chosen to be only from Spain -- an area where populations are known to be distinct genetic groups.
 
-By shuffling the direction of the alternative alleles, we can have a random LD structure. 
 
 ```{r}
-# Randomize direction of SNPs
-Xs2<-apply(Xs,2,function(i) i* sample(c(-1,1),size=1,prob = c(1,1)))
-
-
-# LD r2
-V=cor(Xs2)
-# dim(V)
-hist(V,xlab="Linkage disequilibrium (r2)", main="",col="black",breaks=100)
-
-# Calculate phenotypes
-y<-(Xs2 %*% s)
-h2 <- 0.9 
-y <- y + rnorm(515,mean=0,sd=sqrt((1-h2)/h2*var(y)))
-y<-y/mean(y)
-y[y<0]<-0
-hist(y, xlab="Relative fitness per individuals (w)",main="",col="black",breaks=50)
-
-# GWA marg
-marglm<-gwamarg(y, Xs2)
-b=marglm
-
-# GWA after kinship
-blup<-kin.blup(data=data.frame(y=y, Genotype=genomes$fam$sample.ID) ,
-               pheno="y",
-               geno="Genotype",
-               K=K)
-blup$Vg / (blup$Vg+blup$Ve)
-myres<-blup$resid
-bg<-gwamarg(myres, Xs2)
-
-# Allele frequency change
-Xs2=Xs2+1
-X01=(Xs2)/( (Xs2)+1e-10) 
-
-p0=apply(X01,2,mean)
-hist(p0,xlab="alternative allele frequency",main="",col="black", breaks=100,xlim=c(0,1))
-
-p1<-sapply(1:ncol(X01), function(i){
-        sample(x = X01[,i], 
-           size = 515,
-           prob = c(y),
+set.seed(1)
+# Just to try with a subset of the species
+# sampled<-sample(1:515,250)
+# sampled<-1:100
+data(acc515)
+sampled<-which(acc515$country =="ESP")
+sampled<-which(acc515$country =="ESP") %>% sample(.,50)
+  
+p0_=apply(X1[sampled,],2,mean)
+p1_<-sapply(1:ncol(X1[sampled,]), function(i){
+        sample(x = X1[sampled,i], 
+           size = 250,
+           prob = c(y[sampled]),
            replace=T
            ) %>% mean 
         }
       )
+# ggdotscolor(b,p1_-p0_,
+#              ylab=TeX("p_1 - p_0"),
+#              xlab=TeX("$\\beta$ from marginal GWA") ) +
+#               geom_hline(yintercept=0,color="grey") +
+#               geom_vline(xintercept=0,color="grey") 
+# ggdotscolor(c(bg),p1_-p0_,
+#              ylab=TeX("p_1 - p_0"),
+#              xlab=TeX("$\\beta_{GBLUP}$ from GBLUP GWA")) +
+#               geom_hline(yintercept=0,color="grey") +
+#               geom_vline(xintercept=0,color="grey") 
+pl7<-ggdotscolor( b*(1-p0_)*p0_ ,p1_-p0_,
+             xlab = TeX("$\\beta (1-p)p$"),
+             ylab=TeX("p_1-p_0")
+             ) %>% moiR::addggregression()
+pl8<-ggdotscolor( c(bg)*(1-p0_)*p0_ ,p1_-p0_,
+             xlab = TeX(" $\\beta_{GBLUP} (1-p)p$"),
+             ylab=TeX("p_1-p_0")
+             ) %>% moiR::addggregression()
 
-(ggdotscolor(b,p1-p0,
-             ylab=TeX("p_1 - p_0"),
-             xlab=TeX("$\\beta$ from marginal GWA")) %>% moiR::addggregression())
-(ggdotscolor(c(bg),p1-p0,
-             ylab=TeX("p_1 - p_0"),
-             xlab=TeX("$\\beta_{GBLUP}$ from GBLUP GWA")) %>% moiR::addggregression())
+pl7
+pl8
 ```
 
-We observe the same pattern. Because what reflects best allele frequency change is ultimately the difference of genotypes of alternative alleles.
+This shows that the rankings of SNPs from marginal GWA are still useful to understand selection in another population with a different genetic makeup (both in diversity and linkage).
+
+## All figures together
+```{r, fig.width = 2*4, fig.height= 4*4}
+
+plot_grid(pl1,pl2,pl3,pl4,pl5,pl6,pl7,pl8,ncol=2)
+
+
+```
+
+
+--------------------------------------------------------------------------------
+## NOTES
+
+NOTES: To make sure that that this extrapolability is not because the GBLUP GWA is not very powerful, we also check whether a ridge regression or lasso (a likelihood approach analog of BSLMM) works better, but still only marginal GWA measured in the 515 population correlates significantly with allele frequency changes.
+
+
+```{r}
+###************************************************************************####
+# We can also use ridge regression, in analogy to the
+# Bayesian Sparse Linear Mixed Model -- this is a multiloci gwa, an is probably the best estimating true effects.s
+# library(MASS)
+# bridge<-lm.ridge(y~X1)
+# b_ridge=bridge$coef
+# ggdotscolor(b_ridge,s,
+#             xlab = TeX("$\\beta$ from Multilocus Ridge GWA"),
+#             ylab = TeX("$s$")) %>% moiR::addggregression()
+# ggdotscolor( c(b_ridge)*(1-p0_)*p0_ ,p1_-p0_,
+#              xlab = TeX(" $\\beta_{ridge} (1-p)p$"),
+#              ylab=TeX("p_1-p_0")
+#              ) %>% moiR::addggregression()
+
+```
+
+NOTES:Another GWA approach would be to simply fit the 
+
+```{r}
+###************************************************************************####
+# PC<-princomp(K)
+# # plot(PC)
+# PCs<-PC$scores[,1:10]
+# b<-gwamarg(y,X1)
+# b_pca<-gwapca(y,X1,PCs)
+# cor(b,b_pca)
+# 
+# ggdotscolor(b_pca,s,
+#             xlab = TeX("$\\beta_{pca}$ from PCA corrected GWA"),
+#             ylab = TeX("$s$")) %>% moiR::addggregression()
+# ggdotscolor( c(b_pca)*(1-p0_)*p0_ ,p1_-p0_,
+#              xlab = TeX(" $\\beta_{pca} (1-p)p$"),
+#              ylab=TeX("p_1-p_0")
+#              ) %>% moiR::addggregression()
+
+```
+
+
+NOTES: We have also randomized the SNP direction to remove LD structure, 
+and the conclusions hold the same
+
+```{r}
+# # Randomize direction of SNPs
+# Xs2<-apply(Xs,2,function(i) i* sample(c(-1,1),size=1,prob = c(1,1)))
+# 
+# 
+# # LD r2
+# V=cor(Xs2)
+# # dim(V)
+# hist(V,xlab="Linkage disequilibrium (r2)", main="",col="black",breaks=100)
+# 
+# # Calculate phenotypes
+# y<-(Xs2 %*% s)
+# h2 <- 0.9
+# y <- y + rnorm(515,mean=0,sd=sqrt((1-h2)/h2*var(y)))
+# y<-y/mean(y)
+# y[y<0]<-0
+# # hist(y, xlab="Relative fitness per individuals (w)",main="",col="black",breaks=50)
+# 
+# # GWA marg
+# marglm<-gwamarg(y, Xs2)
+# b=marglm
+# 
+# # GWA after kinship
+# blup<-kin.blup(data=data.frame(y=y, Genotype=genomes$fam$sample.ID) ,
+#                pheno="y",
+#                geno="Genotype",
+#                K=K)
+# blup$Vg / (blup$Vg+blup$Ve)
+# myres<-blup$resid
+# bg<-gwamarg(myres, Xs2)
+# 
+# # Allele frequency change
+# Xs2=Xs2+1
+# X01=(Xs2)/( (Xs2)+1e-10)
+# 
+# p0=apply(X01,2,mean)
+# # hist(p0,xlab="alternative allele frequency",main="",col="black", breaks=100,xlim=c(0,1))
+# 
+# p1<-sapply(1:ncol(X01), function(i){
+#         sample(x = X01[,i],
+#            size = 515,
+#            prob = c(y),
+#            replace=T
+#            ) %>% mean
+#         }
+#       )
+# 
+# ggdotscolor(b,s,
+#             xlab = TeX("$\\beta$ from marginal GWA"),
+#             ylab = TeX("True $s$"))
+# ggdotscolor(c(bg),s,
+#             xlab = TeX("$\\beta_{GBLUP}$ from GBLUP GWA"),
+#             ylab = TeX("True $s$"))
+# (ggdotscolor(b,p1-p0,
+#              ylab=TeX("p_1 - p_0"),
+#              xlab=TeX("$\\beta$ from marginal GWA")) %>% moiR::addggregression())
+# (ggdotscolor(c(bg),p1-p0,
+#              ylab=TeX("p_1 - p_0"),
+#              xlab=TeX("$\\beta_{GBLUP}$ from GBLUP GWA")) %>% moiR::addggregression())
+```
+
