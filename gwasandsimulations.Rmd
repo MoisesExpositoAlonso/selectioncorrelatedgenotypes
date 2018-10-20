@@ -333,18 +333,19 @@ NOTES:Another GWA approach would be to simply fit the
 NOTES: We have also randomized the SNP direction to remove LD structure, 
 and the conclusions hold the same
 
-```{r}
-# # Randomize direction of SNPs
-# Xs2<-apply(Xs,2,function(i) i* sample(c(-1,1),size=1,prob = c(1,1)))
-# 
+# ```{r}
+# # A random genome matrix
+# Xs2<-Xsim(515,1000,maf = mafsim(1000,type = "exponential"))
+# X2=Xs2+1
+# X12=X2/(X2+1e-32)
 # 
 # # LD r2
 # V=cor(Xs2)
 # # dim(V)
-# hist(V,xlab="Linkage disequilibrium (r2)", main="",col="black",breaks=100)
+# hist(V,xlab="Linkage disequilibrium (r2)", main="",col="black",breaks=20)
 # 
 # # Calculate phenotypes
-# y<-(Xs2 %*% s)
+# y<-(X12 %*% s)
 # h2 <- 0.9
 # y <- y + rnorm(515,mean=0,sd=sqrt((1-h2)/h2*var(y)))
 # y<-y/mean(y)
@@ -352,17 +353,25 @@ and the conclusions hold the same
 # # hist(y, xlab="Relative fitness per individuals (w)",main="",col="black",breaks=50)
 # 
 # # GWA marg
-# marglm<-gwamarg(y, Xs2)
+# marglm<-gwamarg(y, X12)
 # b=marglm
 # 
 # # GWA after kinship
+# K=A.mat(Xs2)
+# colnames(K)=rownames(K)=genomes$fam$sample.ID
+# pheno=data.frame(genomes$fam$sample.ID,y)
+# geno_<-t(Xs2)
+# colnames(geno_)<-genomes$fam$sample.ID
+# geno=cbind(data.frame(genomes$map$marker.ID,
+#                       genomes$map$chromosome,
+#                       genomes$map$physical.pos), geno_)
 # blup<-kin.blup(data=data.frame(y=y, Genotype=genomes$fam$sample.ID) ,
 #                pheno="y",
 #                geno="Genotype",
 #                K=K)
 # blup$Vg / (blup$Vg+blup$Ve)
 # myres<-blup$resid
-# bg<-gwamarg(myres, Xs2)
+# bg<-gwamarg(myres, X12)
 # 
 # # Allele frequency change
 # Xs2=Xs2+1

@@ -22,3 +22,11 @@ gwamarg<-function(y,X){
   })
 }
   
+
+gwapca<-function(y,X,PCs){
+  bpca<-sapply(1:ncol(X), function(i){
+    r<-lm(y~X[,i]+PCs)
+    return(coefficients(r)[2])
+  })
+}
+  
